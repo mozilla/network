@@ -9,6 +9,7 @@ django_csp
 django-environ
 django-filter
 django-redis
+django-rq
 django-storages
 factory_boy
 Faker
@@ -21,6 +22,7 @@ social-auth-app-django
 wagtail-airtable
 wagtail==2.11.3
 wagtail-localize
+wagtail_localize_git
 wagtail-factories
 # see https://github.com/mozilla/foundation.mozilla.org/issues/6162
 git+git://github.com/Pomax/wagtail-inventory.git@ea9a6533e69ff0a6faaf0f069efa115bc22ce697#egg=wagtail-inventory
