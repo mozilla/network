@@ -19,7 +19,7 @@ from wagtail.admin.edit_handlers import InlinePanel, FieldPanel, MultiFieldPanel
 from wagtail.contrib.routable_page.models import RoutablePageMixin, route
 from wagtail.images.edit_handlers import ImageChooserPanel
 from wagtail.snippets.edit_handlers import SnippetChooserPanel
-from wagtail.core.models import Orderable, Page
+from wagtail.core.models import Locale, Orderable, Page
 from wagtail.core import hooks
 
 from wagtail_localize.fields import SynchronizedField, TranslatableField
@@ -57,14 +57,17 @@ TRACK_RECORD_CHOICES = [
 ]
 
 
-def get_product_subset(cutoff_date, authenticated, key, products):
+def get_product_subset(cutoff_date, authenticated, key, products, language_code='en'):
     """
     filter a queryset based on our current cutoff date,
     as well as based on whether a user is authenticated
     to the system or not (authenticated users get to
     see all products, including draft products)
     """
-    products = products.filter(review_date__gte=cutoff_date)
+    products = products.filter(
+        review_date__gte=cutoff_date,
+        locale=Locale.objects.get(language_code=language_code)
+    )
     if not authenticated:
         products = products.live()
     products = products.specific()
@@ -1252,6 +1255,13 @@ class BuyersGuidePage(RoutablePageMixin, FoundationMetadataPageMixin, Page):
         SynchronizedField('slug'),
     ]
 
+    def get_language_code(self, request):
+        """Accepts a request. Returns a language code (string) if there is one. Falls back to English."""
+        default_language_code = settings.LANGUAGE_CODE
+        if hasattr(request, 'LANGUAGE_CODE'):
+            default_language_code = request.LANGUAGE_CODE
+        return default_language_code
+
     @route(r'^about/$', name='how-to-use-view')
     def about_page(self, request):
         context = self.get_context(request)
@@ -1325,6 +1335,7 @@ class BuyersGuidePage(RoutablePageMixin, FoundationMetadataPageMixin, Page):
     @route(r'^categories/(?P<slug>[\w\W]+)/', name='category-view')
     def categories_page(self, request, slug):
         context = self.get_context(request, bypass_products=True)
+        language_code = self.get_language_code(request)
         slug = slugify(slug)
 
         # If getting by slug fails, also try to get it by name.
@@ -1335,6 +1346,7 @@ class BuyersGuidePage(RoutablePageMixin, FoundationMetadataPageMixin, Page):
 
         authenticated = request.user.is_authenticated
         key = f'cat_product_dicts_{slug}_auth' if authenticated else f'cat_product_dicts_{slug}_live'
+        key = f'{language_code}_{key}'
         products = cache.get(key)
 
         if products is None:
@@ -1342,7 +1354,8 @@ class BuyersGuidePage(RoutablePageMixin, FoundationMetadataPageMixin, Page):
                 self.cutoff_date,
                 authenticated,
                 key,
-                ProductPage.objects.filter(product_categories__category__in=[category])
+                ProductPage.objects.filter(product_categories__category__in=[category]),
+                language_code=language_code
             )
 
         context['category'] = category.slug
@@ -1386,9 +1399,12 @@ class BuyersGuidePage(RoutablePageMixin, FoundationMetadataPageMixin, Page):
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
+        language_code = self.get_language_code(request)
 
         authenticated = request.user.is_authenticated
         key = 'home_product_dicts_authed' if authenticated else 'home_product_dicts_live'
+        key = f'{key}_{language_code}'
+
         products = cache.get(key)
 
         if not kwargs.get('bypass_products', False) and products is None:
@@ -1396,10 +1412,15 @@ class BuyersGuidePage(RoutablePageMixin, FoundationMetadataPageMixin, Page):
                 self.cutoff_date,
                 authenticated,
                 key,
-                ProductPage.objects.all()
+                ProductPage.objects.all(),
+                language_code=language_code
             )
 
-        context['categories'] = BuyersGuideProductCategory.objects.filter(hidden=False)
+        categories = BuyersGuideProductCategory.objects.filter(
+            hidden=False,
+            locale=Locale.objects.get(language_code=language_code)
+        )
+        context['categories'] = categories
         context['products'] = products
         context['web_monetization_pointer'] = settings.WEB_MONETIZATION_POINTER
         return context
