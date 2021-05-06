@@ -254,3 +254,5 @@ zipp==3.4.1
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
+
+wagtail-blocks==0.7.2
